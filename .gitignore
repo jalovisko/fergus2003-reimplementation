@@ -1,0 +1,13 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+*.pyzwz
+
+# Virtual environment
+venv/
