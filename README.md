@@ -20,6 +20,7 @@ fergus2003/
     ├── feature_extraction.py    # FeatureExtractor class (detect+PCA)
     ├── constellation_model.py   # EMConstellationLearner + Recognizer
     ├── main_fergus2003.py       # Driver script
+    ├── prepare_data.py          # Optional: download Caltech-101 + Cars 2001 into data/
     └── requirements.txt
 ```
 
@@ -27,26 +28,62 @@ fergus2003/
 
 ## 2. Data
 
-Download from [Caltech Vision Group](http://www.robots.ox.ac.uk/~vgg/data/):
+### 2.1. Layout
 
-| Dataset         | ~Images |
-|-----------------|---------|
-| Motorbikes      | 826     |
-| Airplanes       | 1074    |
-| Faces           | 450     |
-| Cars (rear)     | 1155    |
-| Background      | 900     |
-
-Place them under `data/` as:
+Place images under `python/data/` when using the default `--data_root data` from `python/`, or set `--data_root` / `--data-dir` to any path you prefer:
 
 ```
 data/
-  motorbikes/   *.jpg
-  airplanes/    *.jpg
-  faces/        *.jpg
-  cars_rear/    *.jpg
-  background/   *.jpg
+  motorbikes/   *.jpg | *.png
+  airplanes/    *.jpg | *.png
+  faces/        *.jpg | *.png
+  cars_rear/    *.jpg | *.png
+  background/   *.jpg | *.png
 ```
+
+### 2.2. Quick start (automated)
+
+From `python/`, run:
+
+```bash
+python prepare_data.py
+```
+
+This downloads Caltech-101 and Caltech Cars 2001 (rear) from [Caltech DATA](https://data.caltech.edu/) and copies these folders into **`python/data/`** (override with `--data-dir`):
+
+| Caltech-101 folder   | Output folder  |
+|----------------------|----------------|
+| `airplanes/`         | `airplanes/`   |
+| `Motorbikes/`        | `motorbikes/`  |
+| `Faces_easy/` (default) or `Faces/` | `faces/` |
+| `BACKGROUND_Google/` | `background/`  |
+
+Rear-view cars come from `Cars_2001.zip/cars_rear/` (526 images). That set is smaller than the old “~1155” figure in early mirrors; it is still the standard Caltech rear-facing freeway set.
+
+You need both steps (Caltech-101 and Cars 2001). Plain `python prepare_data.py` runs them in one go.
+
+Optional flags (only if you already filled one half of `data/` and want to re-run the other without redoing the slow step): `--skip-caltech101` (cars only) or `--skip-cars` (101 categories only). Also: `--face-category Faces`, `--clean`, `--data-dir PATH`. Archives are cached under `python/.download_cache/`.
+
+### 2.3. Where the paper pointed (manual / alternate sources)
+
+Fergus *et al.* cited `http://www.robots.ox.ac.uk/~vgg/data/` for most classes in Figure 1. That URL still resolves, but the landing page no longer lists those sets by name. Provenance is split between Caltech (Perona) and Oxford VGG:
+
+| Need | Suggested source | Notes |
+|------|------------------|--------|
+| Same workflow as `prepare_data.py` | [Caltech-101](https://data.caltech.edu/records/20086), [Cars 2001](https://data.caltech.edu/records/20085) | Same lineage as many Caltech benchmarks; Sept 2003 collection. |
+| Standalone motorbike set (826 imgs) | [Motorcycles 2001](https://data.caltech.edu/records/20088) | Use as `motorbikes/` if you want that exact set instead of the 101 category. |
+| Web-harvest zips (good/ok/junk labels) | [VGG mkdb index](https://www.robots.ox.ac.uk/~vgg/data/mkdb/index.html) | `airplane.zip`, `motorbikes.zip`, etc.; later packaging, not guaranteed identical to the 2003 paper splits. |
+| Cars (side), Spotted cats | Not on VGG | Side cars: UIUC (Roth); cats: Corel, see paper text. |
+
+The table below is rough historical sizing for the original web-harvest pools; your counts will differ if you use Caltech-101 + Cars 2001.
+
+| Dataset (paper / old README) | ~Images (order of magnitude) |
+|------------------------------|------------------------------|
+| Motorbikes | ~800 |
+| Airplanes | ~1000 |
+| Faces | ~450 |
+| Cars (rear) | ~500-1100 depending on release |
+| Background | ~900 |
 
 ---
 
@@ -108,7 +145,7 @@ A positive $R$ indicates the object is present.
 
 ## 6. Expected results
 
-| Dataset     | Fergus et al. | This reimplimentation |
+| Dataset     | Fergus et al. | This reimplementation |
 |-------------|---------------|--------------|
 | Motorbikes  | 92.5%         | ~87%         |
 | Airplanes   | 90.2%         | ~87%         |

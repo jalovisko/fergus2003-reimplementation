@@ -11,3 +11,8 @@ __pycache__/
 
 # Virtual environment
 venv/
+.venv/
+
+# prepare_data.py download cache and default image folders
+python/.download_cache/
+python/data/
