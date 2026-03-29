@@ -6,12 +6,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, TypeVar
 
 import numpy as np
 from kadir_brady import kadir_brady
 from PIL import Image
 from sklearn.decomposition import PCA
+from tqdm import tqdm
+
+T = TypeVar("T")
+
+
+def _maybe_tqdm(
+    it: Iterable[T], *, desc: str, unit: str, enabled: bool
+) -> Iterable[T]:
+    if not enabled:
+        return it
+    return tqdm(it, desc=desc, unit=unit, dynamic_ncols=True)
 
 
 @dataclass
@@ -41,12 +52,14 @@ class FeatureExtractor:
         k_pca:    int = 15,
         s_min:    int = 4,
         s_max:    int = 40,
+        progress: bool = True,
     ):
         self.n_feat   = n_feat
         self.patch_sz = patch_sz
         self.k_pca    = k_pca
         self.s_min    = s_min
         self.s_max    = s_max
+        self.progress = progress
         self.pca: Optional[PCA] = None
 
     # ------------------------------------------------------------------
@@ -64,7 +77,12 @@ class FeatureExtractor:
             raise RuntimeError("Call fit() before transform().")
 
         results: List[Features] = []
-        for img in images:
+        for img in _maybe_tqdm(
+            images,
+            desc="Features (transform)",
+            unit="img",
+            enabled=self.progress and len(images) > 0,
+        ):
             img = _to_grey(img)
             feats = kadir_brady(img, self.n_feat, self.s_min, self.s_max)
             if len(feats) == 0:
@@ -93,12 +111,80 @@ class FeatureExtractor:
         return results
 
     def fit_transform(self, images: List[np.ndarray]) -> List[Features]:
-        return self.fit(images).transform(images)
+        """
+        Fit PCA and return features in one pass per image.
+
+        The naive ``fit().transform()`` would run the Kadir-Brady detector twice
+        per image; this implementation detects once (the dominant cost).
+        """
+        stash: List[Optional[Tuple[np.ndarray, List[int], List[Optional[np.ndarray]]]]] = []
+        blocks: List[np.ndarray] = []
+
+        for img in _maybe_tqdm(
+            images,
+            desc="Features (fit+PCA)",
+            unit="img",
+            enabled=self.progress and len(images) > 0,
+        ):
+            img = _to_grey(img)
+            feats = kadir_brady(img, self.n_feat, self.s_min, self.s_max)
+            if len(feats) == 0:
+                stash.append(None)
+                continue
+
+            xs, ys, scales, _ = feats[:, 0], feats[:, 1], feats[:, 2], feats[:, 3]
+            patches = _crop_patches(
+                img, xs.astype(int), ys.astype(int), scales.astype(int), self.patch_sz
+            )
+            valid = [j for j, p in enumerate(patches) if p is not None]
+            if not valid:
+                stash.append(None)
+                continue
+
+            raw_stack = np.stack([patches[j] for j in valid])
+            blocks.append(raw_stack)
+            stash.append((feats, valid, patches))
+
+        if not blocks:
+            raise RuntimeError(
+                "No salient regions in any training image; loosen --s_min/--s_max or check data."
+            )
+
+        all_patches = np.concatenate(blocks, axis=0)
+        self.pca = PCA(n_components=self.k_pca, whiten=False)
+        self.pca.fit(all_patches)
+
+        results: List[Features] = []
+        for inter in _maybe_tqdm(
+            stash,
+            desc="PCA → features",
+            unit="img",
+            enabled=self.progress and len(stash) > 0,
+        ):
+            if inter is None:
+                results.append(
+                    Features(
+                        np.zeros((0, 2)), np.zeros(0), np.zeros((0, self.k_pca))
+                    )
+                )
+                continue
+            feats, valid, patches = inter
+            X_out = np.stack([feats[j, :2] for j in valid])
+            S_out = np.array([np.log(max(feats[j, 2], 1)) for j in valid])
+            raw_patches = np.stack([patches[j] for j in valid])
+            A_out = self.pca.transform(raw_patches)
+            results.append(Features(X_out, S_out, A_out))
+        return results
 
     # ------------------------------------------------------------------
     def _detect_and_crop(self, images: List[np.ndarray]) -> List[np.ndarray]:
         all_patches = []
-        for img in images:
+        for img in _maybe_tqdm(
+            images,
+            desc="Features (fit detect)",
+            unit="img",
+            enabled=self.progress and len(images) > 0,
+        ):
             img = _to_grey(img)
             feats = kadir_brady(img, self.n_feat, self.s_min, self.s_max)
             if len(feats) == 0:

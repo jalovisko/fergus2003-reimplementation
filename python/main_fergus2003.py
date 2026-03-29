@@ -58,6 +58,11 @@ def main():
     parser.add_argument("--s_max",      type=int, default=40,     help="max detector scale")
     parser.add_argument("--seed",       type=int, default=42)
     parser.add_argument("--save_models", action="store_true",     help="pickle learnt models")
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="disable tqdm progress bars during feature extraction",
+    )
     args = parser.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -93,6 +98,7 @@ def main():
         extractor = FeatureExtractor(
             n_feat=args.n_feat, patch_sz=args.patch,
             k_pca=args.k_pca, s_min=args.s_min, s_max=args.s_max,
+            progress=not args.no_progress,
         )
         train_imgs = load_images(train_paths)
         train_feats = extractor.fit_transform(train_imgs)

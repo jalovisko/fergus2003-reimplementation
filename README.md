@@ -117,6 +117,7 @@ Options:
 --k_pca       INT        PCA dims (default: 15)
 --s_min/max   INT        detector scale range (default: 4–40)
 --save_models            pickle learned models
+--no-progress            disable tqdm bars during feature extraction
 ```
 
 ---
